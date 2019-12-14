@@ -49,7 +49,8 @@ def get_articles():
 
 def extract_items(articles):
     """記事一覧から必要な情報のみを抽出し、リスト形式で返す
-    抽出するのは title, url, updated date, likes count, tags"""
+    抽出するのは title, url, updated date, likes count, tags
+    """
     extracted_items = []
     for article in articles:
         d = {
