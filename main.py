@@ -1,98 +1,98 @@
+import argparse
 import csv
 import datetime
 import json
 import os
 
-import requests  # APIを叩く処理をシンプルにするために利用
-from tqdm import tqdm  # ページフェッチの進捗を可視化するために利用
-
-API_KEY = "INPUT YOUR KEY"
-SEARCH_QUERY = "tag:スクラム"
+import requests
+from dotenv import load_dotenv
+from tqdm import tqdm
 
 
-def get_articles():
-    """SEARCH_QUERYでQiitaを検索し、検索結果の記事一覧(articles)をリスト形式で返す
-    投稿記事をGETするQiita APIは、全ての記事を一度に返すようにはなっておらず、代わりにページを指定する必要がある
-    そのためまず総記事数を取得してから、総ページを算出し、その後各ページの記事を取得する   
-    """
-    PER_PAGE_MAX = 100  # APIで取得できる1ページの最大記事数
-    headers = {"Authorization": "Bearer %s" % (API_KEY)}  # Bearer認証用ヘッダ
+class QiitaArticleFetcher:
+    def __init__(self, api_key, query):
+        self.api_key = api_key
+        self.query = query
+        self.headers = {"Authorization": "Bearer %s" % api_key}
 
-    # 検索結果の総記事数を取得する
-    total_articles = int(
-        requests.get(
-            "https://qiita.com/api/v2/items",
-            headers=headers,
-            params={"query": SEARCH_QUERY},
-        ).headers["Total-Count"]
-    )
-    print("The total count of the articles is :", total_articles)
+    def fetch_articles(self):
+        max_articles_per_page = 100
 
-    # 総ページ数を算出する
-    total_pages = total_articles // PER_PAGE_MAX + 1  # 総ページ数 = (総記事数 / 1ページの記事数)の商 + 1
+        total_article_count = int(
+            requests.get(
+                "https://qiita.com/api/v2/items",
+                headers=self.headers,
+                params={"query": self.query},
+            ).headers["Total-Count"]
+        )
 
-    # 各ページの記事を取得する
-    articles = []
+        print("Total number of articles :", total_article_count)
 
-    for page in tqdm(range(total_pages)):
-        res = requests.get(
-            "https://qiita.com/api/v2/items",
-            headers=headers,
-            params={"page": page + 1, "per_page": PER_PAGE_MAX, "query": SEARCH_QUERY,},
-        )  # ページは1からはじまる
-        page_articles = json.loads(res.text)
+        total_page_count = total_article_count // max_articles_per_page + 1
 
-        articles.extend(page_articles)
+        all_articles = []
+        for page in tqdm(range(total_page_count)):
+            response = requests.get(
+                "https://qiita.com/api/v2/items",
+                headers=self.headers,
+                params={
+                    "page": page + 1,
+                    "per_page": max_articles_per_page,
+                    "query": self.query,
+                },
+            )
+            articles_on_page = json.loads(response.text)
+            all_articles.extend(articles_on_page)
 
-    return list(articles)
+        return all_articles
 
+    @staticmethod
+    def format_article_data(articles):
+        formatted_articles = []
+        for article in articles:
+            article_data = {
+                "title": article["title"],
+                "url": article["url"],
+                "updated_at": article["updated_at"],
+                "likes_count": article["likes_count"],
+            }
 
-def extract_items(articles):
-    """記事一覧から必要な情報のみを抽出し、リスト形式で返す
-    抽出するのは title, url, updated date, likes count, tags
-    """
-    extracted_items = []
-    for article in articles:
-        d = {
-            "title": article["title"],
-            "url": article["url"],
-            "updated_at": article["updated_at"],
-            "likes_count": article["likes_count"],
-        }
+            for i, tag in enumerate(article["tags"]):
+                key = "tag" + str(i)
+                article_data[key] = tag["name"]
 
-        # タグのみ不定数のため、あるだけ末尾に追加
-        for i, tag in enumerate(article["tags"]):
-            key = "tag" + str(i)
-            d[key] = tag["name"]
+            formatted_articles.append(article_data)
 
-        extracted_items.append(d)
+        return formatted_articles
 
-    return extracted_items
+    def save_articles_to_csv(self, articles):
+        current_time = datetime.datetime.now()
+        output_dir = "outputs/"
+        output_filename = (
+            current_time.strftime("%y%m%d%H%M%S") + "_" + str(self.query) + ".csv"
+        )
 
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-def write_to_csv(items):
-    """リストをCSVに出力する
-    アウトプットパスは"Outputs/YYMMDDHHMMSS_検索文字列.csv"
-    フォルダOutputsがない場合作成する
-    """
+        with open(os.path.join(output_dir, output_filename), "w") as output_file:
+            writer = csv.writer(output_file)
+            for article in articles:
+                writer.writerow(article.values())
 
-    # アウトプットパスの設定
-    now = datetime.datetime.now()
-    output_dir_path = "Outputs/"
-    output_file_path = now.strftime("%y%m%d%H%M%S") + "_" + SEARCH_QUERY + ".csv"
-
-    if not os.path.exists(output_dir_path):
-        os.makedirs(output_dir_path)
-
-    # CSVの書き出し
-    with open(os.path.join(output_dir_path, output_file_path), "w") as f:
-        writer = csv.writer(f)
-        for item in items:
-            writer.writerow(item.values())
-        print("Output CSV is : " + output_dir_path + output_file_path)
+        print("CSV file saved to : " + output_dir + output_filename)
 
 
 if __name__ == "__main__":
-    articles = get_articles()
-    extracted_items = extract_items(articles)
-    write_to_csv(extracted_items)
+    load_dotenv(verbose=True)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--query", help="search query for Qiita articles")
+    args = parser.parse_args()
+
+    qiita_api_key = os.environ.get("QIITA_API_KEY")
+    fetcher = QiitaArticleFetcher(qiita_api_key, args.query)
+
+    fetched_articles = fetcher.fetch_articles()
+    formatted_articles = fetcher.format_article_data(fetched_articles)
+    fetcher.save_articles_to_csv(formatted_articles)

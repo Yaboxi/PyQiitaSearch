@@ -1,19 +1,19 @@
-QiitaSearch
-====
+# py-qiita-search
 
-Qiita APIを利用して、投げたクエリに対する検索結果の一覧をcsvに出力します。
+Qiita API を利用して、指定したクエリに対する検索結果の一覧を CSV に出力します。
 
 ## Usage
 
-*main.py* を編集し、以下を設定してください。
+- Qiita API キーは環境変数を介して設定します。`.env`内に記載してください。
+- クエリはコマンドライン引数を通して設定します。以下がその例です。
 
-* **API_KEY** : 取得したQiita APIキー
-* **SEARCH_QUERY** : 検索したい文字列
+```shell
+python main.py --query "tag:スクラム"
+```
 
-プログラムを実行すると、検索結果のリストが *"Output/日時_検索文字列.csv"* に出力されます
+- クエリは[Qiita 公式: 検索時に利用できるオプション
+  ](https://help.qiita.com/ja/articles/qiita-search-options)を参考に記述してください。
 
 ## Author
 
-* GitHub  : [Yaboxi](https://github.com/Yaboxi)
-* Twitter : [やぼ/野暮](https://twitter.com/yaboxi_) 
-
+Yaboxi
